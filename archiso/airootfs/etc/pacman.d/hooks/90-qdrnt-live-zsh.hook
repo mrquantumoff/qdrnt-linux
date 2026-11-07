@@ -1,0 +1,15 @@
+# remove from airootfs!
+# Live ISO build only: give liveuser the qdrnt zsh setup (oh-my-zsh, duellj)
+# instead of cachyos-zsh-config's powerlevel10k .zshrc.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cachyos-zsh-config
+Target = qdrnt-calamares
+
+[Action]
+Description = Setting up the qdrnt zsh configuration for the live user...
+When = PostTransaction
+Depends = sh
+Exec = /bin/sh -c '[ -r /etc/calamares/scripts/qdrnt.zsh ] && install -Dm644 /etc/calamares/scripts/qdrnt.zsh /usr/local/share/qdrnt/qdrnt.zsh && printf "%s\n" "# qdrnt live session: oh-my-zsh (duellj theme)" "source /usr/local/share/qdrnt/qdrnt.zsh" > /etc/skel/.zshrc'

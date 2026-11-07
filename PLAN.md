@@ -54,15 +54,29 @@ updated by qdrnt.
     otf-fira-sans, otf-firamono-nerd)
   - **qdrnt office:** euro-office-bin, libreoffice-fresh
   - **qdrnt containers:** docker, docker-compose, docker-buildx, distrobox
+  - **qdrnt virtualization:** libvirt, qemu-desktop, virt-manager, dnsmasq,
+    edk2-ovmf, swtpm
   - **qdrnt gaming:** cachyos-gaming-meta, cachyos-gaming-applications,
     epic-games-launcher-bin, protonplus, mangohud with lib32-mangohud, goverlay
 - **The "Firefox and language package" group is removed.**
+- **Zsh plugins page** (`packagechooser@zshplugins`, legacy method): the
+  selection reaches `qdrnt-setup` as `${gs[packagechooser_zshplugins]}`,
+  and it becomes the `plugins=(...)` line in `~/.zshrc`. The fork patches
+  packagechooser so multi-select toggles on click and `default` can be a
+  list.
+- **zsh config:** `calamares/src/scripts/qdrnt.zsh` is installed to
+  `/usr/local/share/qdrnt/qdrnt.zsh`. It sets up oh-my-zsh with the duellj
+  theme, history settings, zsh-autosuggestions and zsh-syntax-highlighting.
+  The live ISO gets the same file through the
+  `90-qdrnt-live-zsh.hook` build hook.
 - **The `qdrnt-setup` post-install script:**
   - Enables `docker.socket` and adds the user to the `docker` group. The group
     is also created up front in `users.conf`.
   - If an NVIDIA display controller is present (PCI vendor `0x10de`), installs
     `cuda`. When Docker is installed, it also installs
     `nvidia-container-toolkit` and runs `nvidia-ctk runtime configure`.
+  - Enables `libvirtd.socket`, autostarts the default network, adds the user
+    to `libvirt` and `kvm`, and allows `virbr0` in ufw.
   - Adds the Flathub remote system-wide.
   - Makes Helium the default browser (`/etc/xdg/mimeapps.list`, `BROWSER`).
 - **Firewall:** CachyOS's ufw step opens KDE Connect automatically, because

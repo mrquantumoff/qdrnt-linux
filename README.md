@@ -21,7 +21,7 @@ A new ISO is built automatically on the 1st of every month.
 |---|---|---|
 | Desktop | KDE Plasma (Plasma Login Manager) | **COSMIC** (cosmic-greeter, greetd autologin) |
 | Browser | Firefox | **Helium** |
-| Live shell | bash, plus fish config | **zsh** with `cachyos-zsh-config` |
+| Live shell | bash, plus fish config | **zsh**: oh-my-zsh with the **duellj** theme, autosuggestions, syntax highlighting |
 | Fonts | Noto, DejaVu, Liberation… | Same, plus **Fira** (Code, Mono, Sans, Nerd) |
 | Idle / lock | Plasma defaults | **Screen-off and suspend disabled**, so the live session never sleeps |
 | Dock | – | **"Install qdrnt"**, Helium, Files, Terminal, Editor, Settings |
@@ -36,8 +36,9 @@ A new ISO is built automatically on the 1st of every month.
 | Desktop choices | ~17 desktops and window managers, KDE is the default | **COSMIC (default), KDE Plasma, GNOME** only |
 | Package list | Downloaded from CachyOS's GitHub at install time | **Bundled** with the installer (reproducible) |
 | User shell | fish | **zsh** (also the default for users added later) |
+| Shell setup | powerlevel10k prompt | **oh-my-zsh + duellj** theme, zsh-autosuggestions, zsh-syntax-highlighting, and a new **"Zsh plugins" page** to pick oh-my-zsh plugins |
 | Browser | Firefox + language pack | **Helium**, set as the default browser |
-| Groups | `docker` not created | User is added to **`docker`** |
+| Groups | No `docker` or `libvirt` setup | User is added to **`docker`**, **`libvirt`** and **`kvm`** |
 | Multilib | Enabled | Enabled, and **re-checked** after install |
 
 Extra package groups, all selected by default (you can untick them):
@@ -47,6 +48,8 @@ Extra package groups, all selected by default (you can untick them):
   Flatpak + Flatseal, KDE Connect, Btrfs Assistant, Fira fonts
 - **qdrnt office:** Euro-Office (`euro-office-bin`), LibreOffice Fresh
 - **qdrnt containers:** Docker (+ compose, buildx), Distrobox
+- **qdrnt virtualization:** libvirt, QEMU (`qemu-desktop`), virt-manager,
+  dnsmasq, OVMF (UEFI guests), swtpm (TPM for Windows 11 guests)
 - **qdrnt gaming:** `cachyos-gaming-meta`, `cachyos-gaming-applications`, Epic
   Games Launcher, ProtonPlus, MangoHud (+ lib32), GOverlay
 
@@ -54,12 +57,28 @@ Post-install setup (`qdrnt-setup`):
 
 - **Docker:** enables `docker.socket` and adds the new user to the `docker`
   group.
+- **libvirt:** enables `libvirtd.socket`, autostarts the `default` NAT
+  network, adds the user to `libvirt` and `kvm`, and sets
+  `LIBVIRT_DEFAULT_URI=qemu:///system`. The ufw step lets traffic through
+  `virbr0`, so guests get DHCP and NAT.
+- **zsh:** installs `/usr/local/share/qdrnt/qdrnt.zsh`. It writes `~/.zshrc`
+  (and `/etc/skel/.zshrc`) with the plugins picked on the "Zsh plugins" page.
+  Edit the `plugins=(...)` line later to change them.
 - **NVIDIA GPU detected:** installs **CUDA**. If Docker is installed, also
   installs `nvidia-container-toolkit` and configures Docker to use it.
 - **Flatpak:** adds the **Flathub** remote system-wide.
 - **Browser:** makes **Helium** the default (`/etc/xdg/mimeapps.list`,
   `BROWSER`).
 - **Firewall:** KDE Connect ports are opened by CachyOS's standard ufw step.
+
+The **"Zsh plugins" page** lists about 30 built-in oh-my-zsh plugins, with
+16 ticked by default: git, sudo, history-substring-search,
+command-not-found, fzf, extract, colored-man-pages, copypath, copyfile,
+copybuffer, dirhistory, archlinux, systemd, docker, docker-compose and
+aliases. The others, such as z, web-search, ssh-agent, gh, kubectl and
+vi-mode, are optional. Clicking an item toggles it. The fork's package
+chooser was patched for this: multi-select pages toggle on click and
+`default` accepts a list.
 
 Everything else is unchanged: kernels, bootloader choice, chwd driver
 detection, btrfs layout and snapshot, Plymouth, ufw, and the CachyOS repos and
