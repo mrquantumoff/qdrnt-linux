@@ -1,0 +1,50 @@
+name: Sync to SourceForge
+# Mirrors all branches and tags to the SourceForge project's git repository
+# (ssh://SF_USER@git.code.sf.net/p/SF_PROJECT/code). Same secrets as the ISO
+# workflow: SF_SSH_KEY, SF_USER, SF_PROJECT.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["**"]
+  delete:
+  workflow_dispatch:
+
+concurrency:
+  group: sync-sourceforge
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Push to SourceForge
+        run: |
+          set -euo pipefail
+          if [[ -z "$SF_SSH_KEY" || -z "$SF_USER" || -z "$SF_PROJECT" ]]; then
+            echo "::warning::SourceForge secrets missing, skipping mirror"
+            exit 0
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SF_SSH_KEY" > ~/.ssh/sourceforge
+          chmod 600 ~/.ssh/sourceforge
+          ssh-keyscan -t ed25519,rsa git.code.sf.net >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/sourceforge -o BatchMode=yes"
+
+          # All GitHub branches become branches on SourceForge; branches and
+          # tags deleted on GitHub are pruned there too.
+          git fetch --prune --tags origin '+refs/heads/*:refs/remotes/origin/*'
+          git remote set-head origin --delete || true
+          git remote add sourceforge "ssh://${SF_USER}@git.code.sf.net/p/${SF_PROJECT}/code"
+          git push --force --prune sourceforge \
+            '+refs/remotes/origin/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          rm -f ~/.ssh/sourceforge
+        env:
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ secrets.SF_USER }}
+          SF_PROJECT: ${{ secrets.SF_PROJECT }}

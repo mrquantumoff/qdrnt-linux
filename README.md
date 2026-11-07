@@ -144,6 +144,13 @@ and can also be started manually from the Actions tab.
   sha256sum -c "$name".sha256
   ```
 
+### SourceForge git mirror
+
+`.github/workflows/sync-sourceforge.yml` pushes every branch and tag to
+`git.code.sf.net/p/<SF_PROJECT>/code` on each push, using the same secrets.
+Branches and tags deleted on GitHub are deleted there too. The project needs
+the Git ("Code") tool enabled.
+
 ## Layout
 
 | Path | Purpose |
