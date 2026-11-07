@@ -1,5 +1,10 @@
 name: Monthly ISO
-# Builds the qdrnt ISO and publishes it as a GitHub release (split into <2 GiB parts).
+# Builds the qdrnt ISO, uploads it to SourceForge (single file) and creates a
+# GitHub release with the checksum and package list. Without the SourceForge
+# secrets, the ISO is attached to the GitHub release in <2 GiB parts instead.
+#
+# Secrets: SF_SSH_KEY (private key), SF_USER, SF_PROJECT, optional SF_API_KEY
+# (Releases API key: makes the new ISO the project's default download).
 
 on:
   schedule:
@@ -12,6 +17,9 @@ permissions:
 concurrency:
   group: iso-build
   cancel-in-progress: false
+
+env:
+  SF_HOST: frs.sourceforge.net
 
 jobs:
   build:
@@ -34,6 +42,8 @@ jobs:
             bash scripts/ci-build.sh
           sudo chown -R "$(id -u):$(id -g)" out
 
+      # Step outputs that contain a secret value are dropped by GitHub, and the
+      # ISO name may contain the project name, so later steps re-derive it.
       - name: Prepare release assets
         id: assets
         run: |
@@ -41,10 +51,17 @@ jobs:
           iso="$(ls out/desktop/qdrnt-*.iso)"
           name="$(basename "$iso")"
           mkdir -p release
-          # GitHub release assets are capped at 2 GiB: split the ISO.
-          split --bytes=1900M --numeric-suffixes=1 --suffix-length=2 "$iso" "release/${name}.part"
           (cd out/desktop && sha256sum "$name") > "release/${name}.sha256"
           cp out/desktop/*.pkgs.txt release/
+
+          if [[ -n "$SF_SSH_KEY" && -n "$SF_USER" && -n "$SF_PROJECT" ]]; then
+            echo "sourceforge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "SourceForge secrets missing: attaching the ISO to the GitHub release in parts"
+            # GitHub release assets are capped at 2 GiB.
+            split --bytes=1900M --numeric-suffixes=1 --suffix-length=2 "$iso" "release/${name}.part"
+            echo "sourceforge=false" >> "$GITHUB_OUTPUT"
+          fi
           ls -lh release
 
           tag="v$(date -u +%Y.%m.%d)"
@@ -52,31 +69,90 @@ jobs:
             tag="${tag}.${GITHUB_RUN_NUMBER}"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "name=$name" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ secrets.SF_USER }}
+          SF_PROJECT: ${{ secrets.SF_PROJECT }}
+
+      - name: Upload to SourceForge
+        if: steps.assets.outputs.sourceforge == 'true'
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SF_SSH_KEY" > ~/.ssh/sourceforge
+          chmod 600 ~/.ssh/sourceforge
+          ssh-keyscan -t ed25519,rsa "$SF_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh_cmd="ssh -i $HOME/.ssh/sourceforge -o BatchMode=yes"
+
+          iso="$(ls out/desktop/qdrnt-*.iso)"
+          name="$(basename "$iso")"
+          dest="/home/frs/project/${SF_PROJECT}/${TAG}/"
+          for attempt in 1 2 3; do
+            if rsync -av --progress -e "$ssh_cmd" "$iso" "release/${name}.sha256" \
+                "${SF_USER}@${SF_HOST}:${dest}"; then
+              break
+            fi
+            [[ $attempt -eq 3 ]] && exit 1
+            echo "upload failed, retrying in 30s"; sleep 30
+          done
+
+          if [[ -n "${SF_API_KEY:-}" ]]; then
+            # Make this ISO the default download for every platform.
+            curl -fsS -X PUT -H "Accept: application/json" \
+              -d "default=windows&default=mac&default=linux&default=bsd&default=solaris&default=others" \
+              -d "api_key=${SF_API_KEY}" \
+              "https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/${name}" >/dev/null \
+              && echo "set as default download" \
+              || echo "::warning::could not set the default download (check SF_API_KEY)"
+          fi
+          rm -f ~/.ssh/sourceforge
+        env:
+          TAG: ${{ steps.assets.outputs.tag }}
+          SF_SSH_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ secrets.SF_USER }}
+          SF_PROJECT: ${{ secrets.SF_PROJECT }}
+          SF_API_KEY: ${{ secrets.SF_API_KEY }}
 
       - name: Publish release
         run: |
-          cat > notes.md <<EOF
+          set -euo pipefail
+          name="$(basename "$(ls out/desktop/qdrnt-*.iso)")"
+          if [[ "$SOURCEFORGE" == "true" ]]; then
+            url="https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/${name}/download"
+            cat > notes.md <<EOF
+          Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares.
+
+          **Download:** [${name}](${url}) (SourceForge, about 3 GB)
+
+          Verify it with the \`.sha256\` attached below:
+
+          \`\`\`sh
+          sha256sum -c ${name}.sha256
+          \`\`\`
+          EOF
+          else
+            cat > notes.md <<EOF
           Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares.
 
           The ISO is split into parts because of GitHub's 2 GiB asset limit. Download every \`.part\` file and the \`.sha256\`, then:
 
           \`\`\`sh
-          cat ${NAME}.part* > ${NAME}
-          sha256sum -c ${NAME}.sha256
+          cat ${name}.part* > ${name}
+          sha256sum -c ${name}.sha256
           \`\`\`
 
           On Windows (PowerShell):
 
           \`\`\`powershell
-          cmd /c copy /b "${NAME}.part*" "${NAME}"
-          Get-FileHash ${NAME} -Algorithm SHA256
+          cmd /c copy /b "${name}.part*" "${name}"
+          Get-FileHash ${name} -Algorithm SHA256
           \`\`\`
           EOF
+          fi
           gh release create "$TAG" release/* --title "qdrnt $TAG" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.assets.outputs.tag }}
-          NAME: ${{ steps.assets.outputs.name }}
+          SOURCEFORGE: ${{ steps.assets.outputs.sourceforge }}
+          SF_PROJECT: ${{ secrets.SF_PROJECT }}

@@ -126,14 +126,23 @@ host's `makepkg.conf` uses `-march=native`.
 ## Releases
 
 `.github/workflows/monthly-iso.yml` runs at 04:00 UTC on the 1st of each month,
-and can also be started manually from the Actions tab. GitHub limits release
-assets to 2 GiB, so the ISO is uploaded in parts. Rebuild it with:
+and can also be started manually from the Actions tab.
 
-```sh
-name=qdrnt-desktop-linux-YYMMDD.iso   # the name from the release
-cat "$name".part* > "$name"
-sha256sum -c "$name".sha256
-```
+- **ISO:** uploaded as a single file to SourceForge, in a folder named after
+  the release tag. The GitHub release links to it and carries the `.sha256`
+  and the package list.
+- **Required secrets:** `SF_SSH_KEY` (private key), `SF_USER`, `SF_PROJECT`.
+- **Optional:** `SF_API_KEY` makes each new ISO the project's default
+  download.
+- **Without the SourceForge secrets,** the ISO goes on the GitHub release
+  instead, split into parts because of GitHub's 2 GiB asset limit. Rebuild it
+  with:
+
+  ```sh
+  name=qdrnt-desktop-linux-YYMMDD.iso   # the name from the release
+  cat "$name".part* > "$name"
+  sha256sum -c "$name".sha256
+  ```
 
 ## Layout
 
