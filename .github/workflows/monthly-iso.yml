@@ -1,4 +1,5 @@
 name: Monthly ISO
+# Builds the qdrnt ISO and publishes it as a GitHub release (split into <2 GiB parts).
 
 on:
   schedule:
