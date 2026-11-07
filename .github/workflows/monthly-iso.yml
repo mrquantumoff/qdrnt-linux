@@ -1,0 +1,81 @@
+name: Monthly ISO
+
+on:
+  schedule:
+    - cron: "0 4 1 * *" # 04:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iso-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          sudo docker image prune --all --force
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build ISO
+        run: |
+          docker run --rm --privileged -v "$PWD:/src" -w /src cachyos/cachyos:latest \
+            bash scripts/ci-build.sh
+          sudo chown -R "$(id -u):$(id -g)" out
+
+      - name: Prepare release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          iso="$(ls out/desktop/qdrnt-*.iso)"
+          name="$(basename "$iso")"
+          mkdir -p release
+          # GitHub release assets are capped at 2 GiB: split the ISO.
+          split --bytes=1900M --numeric-suffixes=1 --suffix-length=2 "$iso" "release/${name}.part"
+          (cd out/desktop && sha256sum "$name") > "release/${name}.sha256"
+          cp out/desktop/*.pkgs.txt release/
+          ls -lh release
+
+          tag="v$(date -u +%Y.%m.%d)"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            tag="${tag}.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish release
+        run: |
+          cat > notes.md <<EOF
+          Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares.
+
+          The ISO is split into parts because of GitHub's 2 GiB asset limit. Download every \`.part\` file and the \`.sha256\`, then:
+
+          \`\`\`sh
+          cat ${NAME}.part* > ${NAME}
+          sha256sum -c ${NAME}.sha256
+          \`\`\`
+
+          On Windows (PowerShell):
+
+          \`\`\`powershell
+          cmd /c copy /b "${NAME}.part*" "${NAME}"
+          Get-FileHash ${NAME} -Algorithm SHA256
+          \`\`\`
+          EOF
+          gh release create "$TAG" release/* --title "qdrnt $TAG" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.assets.outputs.tag }}
+          NAME: ${{ steps.assets.outputs.name }}

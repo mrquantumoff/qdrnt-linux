@@ -1,0 +1,41 @@
+#!/bin/bash
+# Rebuild the live session's pacman keyring from fresh keyring packages.
+# Run (as root) right before the installer starts, so stale ISO keys can't
+# break package signature checks during installation.
+set -u
+
+log() { echo "[qdrnt-refresh-keyring] $*"; }
+
+sync_clock() {
+    # Signatures/keys "from the future" fail verification: get NTP time first.
+    timedatectl set-ntp true
+    local i
+    for i in $(seq 1 30); do
+        [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" == "yes" ]] && { log "clock synced"; return 0; }
+        sleep 1
+    done
+    log "warning: clock not NTP-synced after 30s, continuing"
+}
+
+refresh() {
+    rm -rf /etc/pacman.d/gnupg
+    pacman-key --init || return 1
+    pacman-key --populate archlinux cachyos || return 1
+    # Pull the newest keyrings, then re-populate from them.
+    pacman -Sy --noconfirm archlinux-keyring cachyos-keyring || return 1
+    pacman-key --populate archlinux cachyos || return 1
+}
+
+[[ $EUID -eq 0 ]] || exec sudo "$0" "$@"
+
+sync_clock
+for attempt in 1 2 3; do
+    log "refreshing keyring (attempt $attempt)"
+    if refresh; then
+        log "keyring refreshed"
+        exit 0
+    fi
+    sleep 5
+done
+log "error: keyring refresh failed after 3 attempts"
+exit 1

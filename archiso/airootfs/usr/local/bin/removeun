@@ -22,6 +22,7 @@ local _packages_to_remove=(
   cachyos-calamares-refind
   cachyos-calamares
   cachyos-calamares-config
+  qdrnt-calamares
   edk2-shell
   boost-libs
   doxygen

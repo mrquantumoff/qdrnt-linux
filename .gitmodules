@@ -1,0 +1,4 @@
+[submodule "calamares"]
+	path = calamares
+	url = https://github.com/mrquantumoff/cachyos-calamares.git
+	branch = qdrnt

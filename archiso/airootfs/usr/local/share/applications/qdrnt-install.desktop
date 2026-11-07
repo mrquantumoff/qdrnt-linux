@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install qdrnt
+GenericName=System Installer
+Comment=Install a preconfigured CachyOS to disk
+Exec=/usr/local/bin/calamares-online.sh
+Icon=calamares
+Terminal=false
+Categories=System;
+Keywords=install;installer;calamares;
