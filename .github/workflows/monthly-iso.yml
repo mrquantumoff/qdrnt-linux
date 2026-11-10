@@ -1,7 +1,7 @@
 name: Monthly ISO
-# Builds the qdrnt ISO, uploads it to SourceForge (single file) and creates a
-# GitHub release with the checksum and package list. Without the SourceForge
-# secrets, the ISO is attached to the GitHub release in <2 GiB parts instead.
+# Builds the qdrnt ISO and publishes it two ways: a GitHub release with the ISO
+# in <2 GiB parts (GitHub's asset limit), the checksum and the package list,
+# and a single-file upload to SourceForge (skipped without its secrets).
 #
 # Secrets: SF_SSH_KEY (private key), SF_USER, SF_PROJECT, optional SF_API_KEY
 # (Releases API key: makes the new ISO the project's default download).
@@ -54,12 +54,13 @@ jobs:
           (cd out/desktop && sha256sum "$name") > "release/${name}.sha256"
           cp out/desktop/*.pkgs.txt release/
 
+          # GitHub release assets are capped at 2 GiB.
+          split --bytes=1900M --numeric-suffixes=1 --suffix-length=2 "$iso" "release/${name}.part"
+
           if [[ -n "$SF_SSH_KEY" && -n "$SF_USER" && -n "$SF_PROJECT" ]]; then
             echo "sourceforge=true" >> "$GITHUB_OUTPUT"
           else
-            echo "SourceForge secrets missing: attaching the ISO to the GitHub release in parts"
-            # GitHub release assets are capped at 2 GiB.
-            split --bytes=1900M --numeric-suffixes=1 --suffix-length=2 "$iso" "release/${name}.part"
+            echo "::warning::SourceForge secrets missing: GitHub download only"
             echo "sourceforge=false" >> "$GITHUB_OUTPUT"
           fi
           ls -lh release
@@ -118,38 +119,44 @@ jobs:
         run: |
           set -euo pipefail
           name="$(basename "$(ls out/desktop/qdrnt-*.iso)")"
-          if [[ "$SOURCEFORGE" == "true" ]]; then
-            url="https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/${name}/download"
-            cat > notes.md <<EOF
-          Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares.
+          {
+            echo "Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares."
+            echo
+            echo "## Download"
+            echo
+            if [[ "$SOURCEFORGE" == "true" ]]; then
+              url="https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/${name}/download"
+              echo "**Option 1: SourceForge (single file, about 3 GB):** [${name}](${url})"
+              echo
+              echo "**Option 2: GitHub (in parts):** see below."
+              echo
+            fi
+            cat <<EOF
+          ### GitHub (in parts)
 
-          **Download:** [${name}](${url}) (SourceForge, about 3 GB)
-
-          Verify it with the \`.sha256\` attached below:
-
-          \`\`\`sh
-          sha256sum -c ${name}.sha256
-          \`\`\`
-          EOF
-          else
-            cat > notes.md <<EOF
-          Monthly qdrnt ISO build (CachyOS live, COSMIC). Installer branch: \`qdrnt\` of mrquantumoff/cachyos-calamares.
-
-          The ISO is split into parts because of GitHub's 2 GiB asset limit. Download every \`.part\` file and the \`.sha256\`, then:
+          GitHub limits release files to 2 GiB, so the ISO is split into parts. Download every \`${name}.partNN\` file from the assets below, then join them:
 
           \`\`\`sh
           cat ${name}.part* > ${name}
-          sha256sum -c ${name}.sha256
           \`\`\`
 
           On Windows (PowerShell):
 
           \`\`\`powershell
           cmd /c copy /b "${name}.part*" "${name}"
-          Get-FileHash ${name} -Algorithm SHA256
           \`\`\`
+
+          ## Verify
+
+          Check either download against the \`.sha256\` below:
+
+          \`\`\`sh
+          sha256sum -c ${name}.sha256
+          \`\`\`
+
+          On Windows: \`Get-FileHash ${name} -Algorithm SHA256\`, and compare with the \`.sha256\` file.
           EOF
-          fi
+          } > notes.md
           gh release create "$TAG" release/* --title "qdrnt $TAG" --notes-file notes.md
         env:
           GH_TOKEN: ${{ github.token }}

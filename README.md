@@ -40,6 +40,7 @@ A new ISO is built automatically on the 1st of every month.
 | Browser | Firefox + language pack | **Helium**, set as the default browser |
 | Groups | No `docker` or `libvirt` setup | User is added to **`docker`**, **`libvirt`** and **`kvm`** |
 | Multilib | Enabled | Enabled, and **re-checked** after install |
+| Kernels | `linux-cachyos`, `linux-cachyos-lts` | Same, plus the CachyOS-signed **Easy Anti-Cheat kernel** (`linux-cachyos-eac`), the **default boot entry** (systemd-boot, Limine, rEFInd on UEFI) |
 
 Extra package groups, all selected by default (you can untick them):
 
@@ -70,6 +71,36 @@ Post-install setup (`qdrnt-setup`):
 - **Browser:** makes **Helium** the default (`/etc/xdg/mimeapps.list`,
   `BROWSER`).
 - **Firewall:** KDE Connect ports are opened by CachyOS's standard ufw step.
+- **Easy Anti-Cheat (`qdrnt-eac`):** see below.
+
+### Easy Anti-Cheat kernel
+
+On UEFI with systemd-boot, Limine or rEFInd, the installer adds
+[CachyOS's EAC setup](https://wiki.cachyos.org/configuration/easy_anti_cheat/)
+next to the regular kernels: `linux-cachyos-eac`, the CachyOS-signed
+systemd-boot, `cachyos-eac-signing-key`, `sbctl` and the EAC builds of the
+installed NVIDIA (open / 580xx), ZFS and r8125 modules. It writes the
+**"CachyOS (EAC)"** entry the same way `eac-setup` does and makes it the
+default:
+
+- **systemd-boot:** `cachyos-eac.conf` becomes the `default` in
+  `loader.conf`. The other kernels stay in the menu.
+- **Limine / rEFInd:** EAC only passes when booted through the CachyOS-signed
+  systemd-boot, so it gets its own firmware entry ("CachyOS EAC") placed first
+  in the boot order. Its menu boots EAC after 3 seconds and has an entry that
+  chains to Limine/rEFInd for the other kernels and snapshots.
+
+The entry is added but **not** made the default when the EAC kernel can't
+serve the machine: no TPM 2.0, IOMMU off, an NVIDIA GPU without an EAC driver
+build, or other DKMS modules (they don't load in the EAC kernel). GRUB and
+BIOS installs don't get the EAC kernel; CachyOS doesn't support them.
+
+EAC games also need Secure Boot with the CachyOS EAC CA enrolled. That needs
+the firmware in Setup Mode, so it can't happen in the installer. After the
+first boot, run `sudo eac-setup` (it reuses the entry and packages above),
+enable Secure Boot, and check with `sudo eac-status`. `eac-setup` sets the
+Limine/rEFInd EAC menu timeout to 0; the firmware boot menu still reaches
+Limine/rEFInd.
 
 The **"Zsh plugins" page** lists about 30 built-in oh-my-zsh plugins, with
 16 ticked by default: git, sudo, history-substring-search,
@@ -80,7 +111,7 @@ vi-mode, are optional. Clicking an item toggles it. The fork's package
 chooser was patched for this: multi-select pages toggle on click and
 `default` accepts a list.
 
-Everything else is unchanged: kernels, bootloader choice, chwd driver
+Everything else is unchanged: the regular kernels, bootloader choice, chwd driver
 detection, btrfs layout and snapshot, Plymouth, ufw, and the CachyOS repos and
 mirrors.
 
@@ -128,21 +159,23 @@ host's `makepkg.conf` uses `-march=native`.
 `.github/workflows/monthly-iso.yml` runs at 04:00 UTC on the 1st of each month,
 and can also be started manually from the Actions tab.
 
-- **ISO:** uploaded as a single file to SourceForge, in a folder named after
-  the release tag. The GitHub release links to it and carries the `.sha256`
-  and the package list.
-- **Required secrets:** `SF_SSH_KEY` (private key), `SF_USER`, `SF_PROJECT`.
-- **Optional:** `SF_API_KEY` makes each new ISO the project's default
-  download.
-- **Without the SourceForge secrets,** the ISO goes on the GitHub release
-  instead, split into parts because of GitHub's 2 GiB asset limit. Rebuild it
-  with:
+Each release offers the ISO two ways:
+
+- **GitHub:** the release carries the ISO split into `.partNN` files
+  (GitHub's 2 GiB asset limit), its `.sha256` and the package list. Rebuild
+  it with:
 
   ```sh
   name=qdrnt-desktop-linux-YYMMDD.iso   # the name from the release
   cat "$name".part* > "$name"
   sha256sum -c "$name".sha256
   ```
+
+- **SourceForge:** the whole ISO as a single file, in a folder named after the
+  release tag. The release notes link to it. Needs the secrets `SF_SSH_KEY`
+  (private key), `SF_USER` and `SF_PROJECT`; without them only the GitHub
+  download is published. Optional `SF_API_KEY` makes each new ISO the
+  project's default download.
 
 ### SourceForge git mirror
 

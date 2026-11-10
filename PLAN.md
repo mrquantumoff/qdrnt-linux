@@ -79,6 +79,19 @@ updated by qdrnt.
     to `libvirt` and `kvm`, and allows `virbr0` in ufw.
   - Adds the Flathub remote system-wide.
   - Makes Helium the default browser (`/etc/xdg/mimeapps.list`, `BROWSER`).
+- **Easy Anti-Cheat:** on UEFI with systemd-boot, Limine or rEFInd, `pacstrap`
+  adds `linux-cachyos-eac`, `systemd-boot-cachyos-signed`,
+  `cachyos-eac-signing-key`, `sbctl`, `sbsigntools`, `tpm2-tools`
+  (`linux-cachyos-eac-zfs` on ZFS). `src/scripts/qdrnt-eac` runs after chwd and
+  `bootloader-post-setup`. It installs the EAC NVIDIA/r8125 module packages,
+  writes `$ESP/loader/entries/cachyos-eac.conf` from the bootloader's kernel
+  command line plus CachyOS's EAC options, and makes it the default
+  (systemd-boot: `loader.conf`; Limine/rEFInd: a "CachyOS EAC" firmware entry
+  to `\EFI\cachyos-eac\systemd-bootx64.efi` first in BootOrder, plus a
+  chainload entry back to Limine/rEFInd). Paths and labels match
+  `eac-setup` from cachyos-settings, so `sudo eac-setup` later only enrolls the
+  Secure Boot keys and signs the normal kernels. Not the default without TPM
+  2.0, IOMMU, an EAC NVIDIA build, or with other DKMS modules installed.
 - **Firewall:** CachyOS's ufw step opens KDE Connect automatically, because
   kdeconnect is installed.
 - **Netinstall list:** read only from the bundled file, so it never pulls
@@ -118,7 +131,8 @@ and can also be started by hand (Actions, then "Run workflow"). It builds in a
 privileged `cachyos/cachyos` container (`scripts/ci-build.sh`) and publishes a
 GitHub release tagged `vYYYY.MM.DD`. GitHub caps release assets at 2 GiB, so
 the ISO is uploaded as `.partNN` pieces plus a `.sha256` of the whole ISO.
-Rebuild it with `cat *.iso.part* > qdrnt.iso`.
+Rebuild it with `cat *.iso.part* > qdrnt.iso`. When the SourceForge secrets are
+set, the whole ISO is also uploaded there and linked from the release notes.
 
 ## Updating from upstream
 
